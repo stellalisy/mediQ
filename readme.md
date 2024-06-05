@@ -1,4 +1,6 @@
-# Benchmark System for Patient-Expert Interaction
+# MediQ: Question-Asking LLMs for Adaptive and Reliable Clinical Reasoning
+
+## [paper](https://arxiv.org/abs/2406.00922) [website](https://stellalisy.com/projects/mediQ/) [data](https://github.com/stellali7/mediQ/tree/main/data)
 
 ## Overview
 This benchmark system simulates an interactive conversation between a patient and an expert. The system evaluates how well participants' expert modules can handle realistic patient queries by either asking relevant questions or making final decisions based on the conversation history.
@@ -52,8 +54,17 @@ python benchmark.py --expert_module 'your_expert_module' --expert_class 'YourExp
 
 Ensure to replace the placeholder values with actual parameters relevant to your setup.
 
-## How to Participate
+## Try out your own Expert system
 Participants are expected to create their own `Expert` class within a module specified by `--expert_module`. The class should correctly implement the `respond` method to interact with the `Patient` instances based on their states. The response should either be a continuation question or a final decision. Your implementation will be tested against a variety of patient scenarios provided in the development dataset.
 
-## Example
-Here is an example of a simple `Expert` implementation:
+## How to Cite
+```
+@misc{li2024mediq,
+      title={MEDIQ: Question-Asking LLMs for Adaptive and Reliable Clinical Reasoning}, 
+      author={Shuyue Stella Li and Vidhisha Balachandran and Shangbin Feng and Jonathan Ilgen and Emma Pierson and Pang Wei Koh and Yulia Tsvetkov},
+      year={2024},
+      eprint={2406.00922},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
