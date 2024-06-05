@@ -1,6 +1,6 @@
 # MediQ: Question-Asking LLMs for Adaptive and Reliable Clinical Reasoning
 
-## [paper](https://arxiv.org/abs/2406.00922) [website](https://stellalisy.com/projects/mediQ/) [data](https://github.com/stellali7/mediQ/tree/main/data)
+## [[paper](https://arxiv.org/abs/2406.00922)] [[website](https://stellalisy.com/projects/mediQ/)] [[data](https://github.com/stellali7/mediQ/tree/main/data)]
 
 ## Overview
 This benchmark system simulates an interactive conversation between a patient and an expert. The system evaluates how well participants' expert modules can handle realistic patient queries by either asking relevant questions or making final decisions based on the conversation history.
