@@ -85,30 +85,6 @@ def main():
     print(f"Accuracy: {sum(correct) / len(correct)}")
 
 
-def run_patient_interaction(expert, sample):
-    patient = Patient(sample)  # Assuming the patient is initialized with the sample which includes necessary context
-    temp_choice_list = []
-
-    while patient.get_questions() < args.max_questions():
-        patient_state = patient.get_state()
-        response_type, response = expert.respond(patient_state)
-
-        if response_type == "question":
-            temp_choice = expert.choice(patient_state)  # Expert makes a choice based on the current state
-            temp_choice_list.append(temp_choice)  # Log the question as an intermediate choice
-            patient.respond(response)  # Patient generates an answer based on the current sample and the last question asked
-
-        elif response_type == "choice":
-            temp_choice_list.append(response)
-            return response, patient.get_questions(), patient.get_answers(), temp_choice_list
-        
-        else:
-            raise ValueError("Invalid response type from expert.")
-        
-    stuck_choice = expert.choice(patient.get_state())
-    return stuck_choice, patient.get_questions(), patient.get_answers(), temp_choice_list + [stuck_choice]
-
-
 def run_patient_interaction(expert_class, sample):
     expert = expert_class(args, sample["question"], sample["options"])
     patient = Patient(args, sample)  # Assuming the patient is initialized with the sample which includes necessary context
