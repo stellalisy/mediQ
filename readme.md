@@ -44,12 +44,11 @@ Before running the benchmark, configure the necessary parameters in `args.py`:
 - `--output_filepath`: Path where the output JSONL files will be saved.
 
 ## Running the Benchmark
-To run the benchmark, use the following command:
+To test run the benchmark, use the following command (note: the Patient system is provided as described in the paper, the Expert system is a skeleton code. For a fast test run, use `--patient_variant random` to not call use any actual model or API):
 ```
-python benchmark.py --expert_module 'your_expert_module' --expert_class 'YourExpertClassName' \
-                    --data_dir 'path_to_data_directory' --dev_filename 'dev_data.jsonl' \
-                    --log_filename 'benchmark.log' --history_log_filename 'history.log' --message_log_filename 'messages.log' \
-                    --output_filepath 'output.jsonl'
+python mediQ_benchmark.py  --expert_module expert --expert_class Expert --patient_variant random \
+                        --data_dir ../data/MedQA --dev_filename all_dev_good.jsonl \
+                        --output_filename out.jsonl --max_questions 10
 ```
 
 Ensure to replace the placeholder values with actual parameters relevant to your setup.

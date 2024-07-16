@@ -3,7 +3,7 @@ from helper import get_response
 
 class Patient:
     def __init__(self, args, sample):
-        self.variant = args.variant
+        self.variant = args.patient_variant
         # Assuming 'context' is a list or a long string of historical or background information
         if isinstance(sample['context'], list) and len(sample['context']) > 0:
             self.initial_info = sample['context'][0]  # Taking the first item if it's a list

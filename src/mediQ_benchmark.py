@@ -64,7 +64,7 @@ def main():
                 "temp_additional_info": temp_additional_info
             },
             # "eval": {
-            #     "confidence_scores": [],  # TODO: how confident is the expert in their choice
+            #     "confidence_scores": [],  # TODO: how confident is the expert_system in their choice
             #     "repeat_question_score": [],
             #     "repeat_answer_score": [],
             #     "relevancy_score": [],
@@ -78,7 +78,7 @@ def main():
         history_logger.info(f"||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\nInteraction ended for patient #{pid}")
 
 
-        with open(args.output_filepath, 'a+') as f:
+        with open(args.output_filename, 'a+') as f:
             f.write(json.dumps(output_dict) + '\n')
 
         general_logger.info(f'Processed {num_processed}/{len(patient_data)} patients | Accuracy: {sum(correct) / len(correct)}')
@@ -86,40 +86,40 @@ def main():
 
 
 def run_patient_interaction(expert_class, sample):
-    expert = expert_class(args, sample["question"], sample["options"])
-    patient = Patient(args, sample)  # Assuming the patient is initialized with the sample which includes necessary context
+    expert_system = expert_class(args, sample["question"], sample["options"])
+    patient_system = Patient(args, sample)  # Assuming the patient_system is initialized with the sample which includes necessary context
     temp_choice_list = []
     temp_additional_info = []  # To store optional data like confidence scores
 
-    while len(patient.get_questions()) < args.max_questions:
-        patient_state = patient.get_state()
-        response_dict = expert.respond(patient_state)
+    while len(patient_system.get_questions()) < args.max_questions:
+        patient_state = patient_system.get_state()
+        response_dict = expert_system.respond(patient_state)
 
-        # The expert's respond method now returns a dictionary
+        # The expert_system's respond method now returns a dictionary
         response_type = response_dict["type"]
         response_content = response_dict["content"]
         # Optional return values for analysis, e.g., confidence score, logprobs
         temp_additional_info.append({k: v for k, v in response_dict.items() if k not in ["type", "content"]})
 
         if response_type == "question":
-            temp_choice = expert.choice(patient_state)  # Expert makes a choice based on the current state
+            temp_choice = expert_system.choice(patient_state)  # Expert makes a choice based on the current state
             temp_choice_list.append(temp_choice)  # Log the question as an intermediate choice
-            patient.respond(response_content)  # Patient generates an answer based on the last question asked
+            patient_system.respond(response_content)  # Patient generates an answer based on the last question asked
 
         elif response_type == "choice":
             temp_choice_list.append(response_content)
-            return response_content, patient.get_questions(), patient.get_answers(), temp_choice_list, temp_additional_info
+            return response_content, patient_system.get_questions(), patient_system.get_answers(), temp_choice_list, temp_additional_info
         
         else:
-            raise ValueError("Invalid response type from expert.")
+            raise ValueError("Invalid response type from expert_system.")
         
     # If max questions are reached and no final decision has been made
-    response_dict = expert.choice(patient.get_state())
+    response_dict = expert_system.choice(patient_system.get_state())
     stuck_response = response_dict["chocie"]
     # Optional return values for analysis, e.g., confidence score, logprobs
     temp_additional_info.append({k: v for k, v in response_dict.items() if k != "chocie"})
     
-    return stuck_response, patient.get_questions(), patient.get_answers(), temp_choice_list + [stuck_response], temp_additional_info
+    return stuck_response, patient_system.get_questions(), patient_system.get_answers(), temp_choice_list + [stuck_response], temp_additional_info
 
 
 if __name__ == "__main__":
