@@ -20,6 +20,11 @@ Navigate into the project directory:
 cd MediQ
 ```
 
+Create a new conda environment:
+```
+conda create --name mediQ python=3.9
+```
+
 Install the required Python libraries (if not already installed):
 ```
 pip install -r requirements.txt
@@ -34,8 +39,10 @@ pip install -r requirements.txt
 
 ## Configuration
 Before running the benchmark, configure the necessary parameters in `args.py`:
-- `--expert_module`: The module name where the participant's expert class is implemented.
-- `--expert_class`: The name of the expert class to use for the benchmark.
+- `--expert_module`: The file name (without `.py`) where the Expert class is implemented (e.g. expert if your Expert class definition is in `expert.py`)
+- `--expert_class`: The name of the Expert class to be evaluated, this should be defined in the file `[expert_module].py` (e.g. RandomExpert)
+- `--patient_module`: The file name (without `.py`) where the Patient class is implemented (e.g. patient if your Patient class definition is in `patient.py`)
+- `--patient_class`: The name of the Patient class to use for the benchmark, this should be defined in the file `[patient_module].py` (e.g. RandomPatient)
 - `--data_dir`: Directory containing the development data files.
 - `--dev_filename`: Filename for development data.
 - `--log_filename`: Filename for logging general benchmark information.
@@ -44,28 +51,29 @@ Before running the benchmark, configure the necessary parameters in `args.py`:
 - `--output_filepath`: Path where the output JSONL files will be saved.
 
 ## Running the Benchmark
+NOTE: if you choose to use an OpenAI model to power the benchmark, you need to put the API key in `src/keys.py`.
+
 To test run the benchmark, use the following command (note: the Patient system is provided as described in the paper, the Expert system is a skeleton code. For a fast test run, use `--patient_variant random` to not call use any actual model or API):
 ```
-python mediQ_benchmark.py  --expert_module expert --expert_class Expert --patient_variant random \
-                        --data_dir ../data/MedQA --dev_filename all_dev_good.jsonl \
+python mediQ_benchmark.py  --expert_module expert --expert_class FixedExpert \
+                        --patient_module patient --patient_class RandomPatient \
+                        --data_dir ../data --dev_filename all_dev_good.jsonl \
                         --output_filename out.jsonl --max_questions 10
 ```
 
 Ensure to replace the placeholder values with actual parameters relevant to your setup.
 
 ## Try out your own Expert system
-Participants are expected to create their own `Expert` class within a module specified by `--expert_module`. The class should correctly implement the `respond` method to interact with the `Patient` instances based on their states. The response should either be a continuation question or a final decision. Your implementation will be tested against a variety of patient scenarios provided in the development dataset.
+You can easily create their own `Expert` class within a module specified by `--expert_module`, or old a different model by specifying the model path in `--expert_model`. The class should correctly implement the `respond` method to interact with the `Patient` instances based on their states (the Patient can be customized as well). The response should either be a continuation question or a final decision. Your implementation will be tested against a variety of patient scenarios provided in the development dataset.
 
 ## How to Cite
 ```
-@misc{li2024mediq,
-      title={MEDIQ: Question-Asking LLMs for Adaptive and Reliable Clinical Reasoning}, 
-      author={Shuyue Stella Li and Vidhisha Balachandran and Shangbin Feng and Jonathan Ilgen and Emma Pierson and Pang Wei Koh and Yulia Tsvetkov},
-      year={2024},
-      eprint={2406.00922},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
-}
+@inproceedings{li2024mediq,
+        title={MediQ: Question-Asking LLMs and a Benchmark for Reliable Interactive Clinical Reasoning},
+        author={Li, Shuyue Stella and Balachandran, Vidhisha and Feng, Shangbin and Ilgen, Jonathan S and Pierson, Emma and Koh, Pang Wei and Tsvetkov, Yulia},
+        journal={The Thirty-eighth Annual Conference on Neural Information Processing Systems},
+        year={2024}
+      }
 ```
 
 Shield: [![CC BY 4.0][cc-by-shield]][cc-by]

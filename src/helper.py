@@ -36,7 +36,8 @@ def get_response(messages, model_name, temperature=1, max_tokens=512, top_p=1, t
         # Local or other Hugging Face supported models
         return get_response_local(messages, model_name, temperature, max_tokens, top_p, top_logprobs, **kwargs)
 
-def get_response_openai(messages, model_name, temperature, max_tokens, top_p, top_logprobs, api_account):
+
+def get_response_openai(messages, model_name, temperature, max_tokens, top_p, top_logprobs, api_account, **kwargs):
     openai.api_key = mykey[api_account]  # Setup API key appropriately
     response = openai.ChatCompletion.create(
                     engine=model_name.replace('.', ''),
@@ -53,12 +54,14 @@ def get_response_openai(messages, model_name, temperature, max_tokens, top_p, to
                     logprobs=True, 
                     top_logprobs=top_logprobs
                 )
-    usage += model_pricing[model_name][0]*response["usage"]["prompt_tokens"] + model_pricing[model_name][1]*response["usage"]["completion_tokens"]
+    num_input_tokens = response["usage"]["prompt_tokens"]
+    num_output_tokens = response["usage"]["completion_tokens"]
     response_text = response.choices[0].text.strip()
     log_probs = response.choices[0].logprobs.top_logprobs if top_logprobs > 0 else None
-    return response_text, log_probs
+    return response_text, log_probs, {"input_tokens": num_input_tokens, "output_tokens": num_output_tokens}
 
-def get_response_local(messages, model_name, temperature=0.6, max_tokens=256, top_p=0.9, top_logprobs=0):
+
+def get_response_local(messages, model_name, temperature=0.6, max_tokens=256, top_p=0.9, top_logprobs=0, **kwargs):
     model, tokenizer = models.get(model_name, (None, None))
     
     if model is None or tokenizer is None:
@@ -83,7 +86,8 @@ def get_response_local(messages, model_name, temperature=0.6, max_tokens=256, to
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id
         )
+
         response_text = tokenizer.decode(outputs[0][inputs.shape[-1]:], skip_special_tokens=True)
-        return response_text, None
+        return response_text, None, {"input_tokens": inputs.shape[-1], "output_tokens": outputs.shape[-1]-inputs.shape[-1]}
     else:
-        return "Model not found or failed to load.", None
+        return "Model not found or failed to load.", None, None
