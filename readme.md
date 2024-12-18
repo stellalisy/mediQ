@@ -5,10 +5,6 @@
 ## Overview
 This benchmark system simulates an interactive conversation between a patient and an expert. The system evaluates how well participants' expert modules can handle realistic patient queries by either asking relevant questions or making final decisions based on the conversation history.
 
-## Requirements
-- Python 3.8 or higher
-- Necessary Python libraries: json, os, logging, importlib
-
 ## Installation
 Clone this repository to your local machine using the following command:
 ```
@@ -20,14 +16,9 @@ Navigate into the project directory:
 cd MediQ
 ```
 
-Create a new conda environment:
+Create a new conda environment with necessary packages (note: you need to be on a GPU node to install PyTorch with CUDA):
 ```
-conda create --name mediQ python=3.9
-```
-
-Install the required Python libraries (if not already installed):
-```
-pip install -r requirements.txt
+conda env create -f environment.yml
 ```
 
 
