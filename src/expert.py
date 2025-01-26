@@ -23,7 +23,9 @@ class Expert:
             "options_dict": self.options,
             "messages": prev_messages,
             "independent_modules": self.args.independent_modules,
-            "model_name": self.args.expert_model,
+            "model_name": self.args.expert_model_question_generator,
+            "use_vllm": self.args.use_vllm,
+            "use_api": self.args.use_api,
             "temperature": self.args.temperature,
             "max_tokens": self.args.max_tokens,
             "top_p": self.args.top_p,
@@ -31,6 +33,26 @@ class Expert:
             "api_account": self.args.api_account
         }
         return expert_functions.question_generation(**kwargs)
+    
+    def get_abstain_kwargs(self, patient_state):
+        kwargs = {
+            "max_depth": self.args.max_questions,
+            "patient_state": patient_state,
+            "rationale_generation": self.args.rationale_generation,
+            "inquiry": self.inquiry,
+            "options_dict": self.options,
+            "abstain_threshold": self.args.abstain_threshold,
+            "self_consistency": self.args.self_consistency,
+            "model_name": self.args.expert_model,
+            "use_vllm": self.args.use_vllm,
+            "use_api": self.args.use_api,
+            "temperature": self.args.temperature,
+            "max_tokens": self.args.max_tokens,
+            "top_p": self.args.top_p,
+            "top_logprobs": self.args.top_logprobs,
+            "api_account": self.args.api_account
+        }
+        return kwargs
 
 
 class RandomExpert(Expert):
@@ -53,7 +75,7 @@ class RandomExpert(Expert):
         return {
             "type": "question" if abstain else "choice",
             "question": toy_question,
-            "answered_idx": toy_decision,
+            "letter_choice": toy_decision,
             "confidence": conf_score,  # Optional confidence score
             "urgent": True,  # Example of another optional flag
             "additional_info": "Check for any recent changes."  # Any other optional data
@@ -67,25 +89,12 @@ class RandomExpert(Expert):
 
 class BasicExpert(Expert):
     def respond(self, patient_state):
-        kwargs = {
-            "patient_state": patient_state,
-            "rationale_generation": self.args.rationale_generation,
-            "inquiry": self.inquiry,
-            "options_dict": self.options,
-            "abstain_threshold": self.args.abstain_threshold,
-            "self_consistency": self.args.self_consistency,
-            "model_name": self.args.expert_model,
-            "temperature": self.args.temperature,
-            "max_tokens": self.args.max_tokens,
-            "top_p": self.args.top_p,
-            "top_logprobs": self.args.top_logprobs,
-            "api_account": self.args.api_account
-        }
+        kwargs = self.get_abstain_kwargs(patient_state)
         abstain_response_dict = expert_functions.implicit_abstention_decision(**kwargs)
         return {
             "type": "question" if abstain_response_dict["abstain"] else "choice",
             "question": abstain_response_dict["atomic_question"],
-            "answered_idx": abstain_response_dict["answered_idx"],
+            "letter_choice": abstain_response_dict["letter_choice"],
             "confidence": abstain_response_dict["confidence"],
             "usage": abstain_response_dict["usage"]
         }
@@ -94,26 +103,12 @@ class BasicExpert(Expert):
 class FixedExpert(Expert):
     def respond(self, patient_state):
         # Decision-making based on the initial information, history of interactions, current inquiry, and options
-        kwargs = {
-            "max_depth": self.args.max_questions,
-            "patient_state": patient_state,
-            "rationale_generation": self.args.rationale_generation,
-            "inquiry": self.inquiry,
-            "options_dict": self.options,
-            "abstain_threshold": self.args.abstain_threshold,
-            "self_consistency": self.args.self_consistency,
-            "model_name": self.args.expert_model,
-            "temperature": self.args.temperature,
-            "max_tokens": self.args.max_tokens,
-            "top_p": self.args.top_p,
-            "top_logprobs": self.args.top_logprobs,
-            "api_account": self.args.api_account
-        }
+        kwargs = self.get_abstain_kwargs(patient_state)
         abstain_response_dict = expert_functions.fixed_abstention_decision(**kwargs)
         if abstain_response_dict["abstain"] == False:
             return {
                 "type": "choice",
-                "answered_idx": abstain_response_dict["answered_idx"],
+                "letter_choice": abstain_response_dict["letter_choice"],
                 "confidence": abstain_response_dict["confidence"],
                 "usage": abstain_response_dict["usage"]
             }
@@ -124,7 +119,7 @@ class FixedExpert(Expert):
         return {
             "type": "question",
             "question": question_response_dict["atomic_question"],
-            "answered_idx": abstain_response_dict["answered_idx"],
+            "letter_choice": abstain_response_dict["letter_choice"],
             "confidence": abstain_response_dict["confidence"],
             "usage": abstain_response_dict["usage"]
         }
@@ -133,26 +128,12 @@ class FixedExpert(Expert):
 class BinaryExpert(Expert):
     def respond(self, patient_state):
         # Decision-making based on the initial information, history of interactions, current inquiry, and options
-        kwargs = {
-            "max_depth": self.args.expert_fixed_depth,
-            "patient_state": patient_state,
-            "rationale_generation": self.args.rationale_generation,
-            "inquiry": self.inquiry,
-            "options_dict": self.options,
-            "abstain_threshold": self.args.abstain_threshold,
-            "self_consistency": self.args.self_consistency,
-            "model_name": self.args.expert_model,
-            "temperature": self.args.temperature,
-            "max_tokens": self.args.max_tokens,
-            "top_p": self.args.top_p,
-            "top_logprobs": self.args.top_logprobs,
-            "api_account": self.args.api_account
-        }
+        kwargs = self.get_abstain_kwargs(patient_state)
         abstain_response_dict = expert_functions.binary_abstention_decision(**kwargs)
         if abstain_response_dict["abstain"] == False:
             return {
                 "type": "choice",
-                "answered_idx": abstain_response_dict["answered_idx"],
+                "letter_choice": abstain_response_dict["letter_choice"],
                 "confidence": abstain_response_dict["confidence"],
                 "usage": abstain_response_dict["usage"]
             }
@@ -163,7 +144,7 @@ class BinaryExpert(Expert):
         return {
             "type": "question",
             "question": question_response_dict["atomic_question"],
-            "answered_idx": abstain_response_dict["answered_idx"],
+            "letter_choice": abstain_response_dict["letter_choice"],
             "confidence": abstain_response_dict["confidence"],
             "usage": abstain_response_dict["usage"]
         }
@@ -172,26 +153,12 @@ class BinaryExpert(Expert):
 class NumericalExpert(Expert):
     def respond(self, patient_state):
         # Decision-making based on the initial information, history of interactions, current inquiry, and options
-        kwargs = {
-            "max_depth": self.args.expert_fixed_depth,
-            "patient_state": patient_state,
-            "rationale_generation": self.args.rationale_generation,
-            "inquiry": self.inquiry,
-            "options_dict": self.options,
-            "abstain_threshold": self.args.abstain_threshold,
-            "self_consistency": self.args.self_consistency,
-            "model_name": self.args.expert_model,
-            "temperature": self.args.temperature,
-            "max_tokens": self.args.max_tokens,
-            "top_p": self.args.top_p,
-            "top_logprobs": self.args.top_logprobs,
-            "api_account": self.args.api_account
-        }
+        kwargs = self.get_abstain_kwargs(patient_state)
         abstain_response_dict = expert_functions.numerical_abstention_decision(**kwargs)
         if abstain_response_dict["abstain"] == False:
             return {
                 "type": "choice",
-                "answered_idx": abstain_response_dict["answered_idx"],
+                "letter_choice": abstain_response_dict["letter_choice"],
                 "confidence": abstain_response_dict["confidence"],
                 "usage": abstain_response_dict["usage"]
             }
@@ -202,7 +169,7 @@ class NumericalExpert(Expert):
         return {
             "type": "question",
             "question": question_response_dict["atomic_question"],
-            "answered_idx": abstain_response_dict["answered_idx"],
+            "letter_choice": abstain_response_dict["letter_choice"],
             "confidence": abstain_response_dict["confidence"],
             "usage": abstain_response_dict["usage"]
         }
@@ -211,26 +178,12 @@ class NumericalExpert(Expert):
 class NumericalCutOffExpert(Expert):
     def respond(self, patient_state):
         # Decision-making based on the initial information, history of interactions, current inquiry, and options
-        kwargs = {
-            "max_depth": self.args.expert_fixed_depth,
-            "patient_state": patient_state,
-            "rationale_generation": self.args.rationale_generation,
-            "inquiry": self.inquiry,
-            "options_dict": self.options,
-            "abstain_threshold": self.args.abstain_threshold,
-            "self_consistency": self.args.self_consistency,
-            "model_name": self.args.expert_model,
-            "temperature": self.args.temperature,
-            "max_tokens": self.args.max_tokens,
-            "top_p": self.args.top_p,
-            "top_logprobs": self.args.top_logprobs,
-            "api_account": self.args.api_account
-        }
+        kwargs = self.get_abstain_kwargs(patient_state)
         abstain_response_dict = expert_functions.numcutoff_abstention_decision(**kwargs)
         if abstain_response_dict["abstain"] == False:
             return {
                 "type": "choice",
-                "answered_idx": abstain_response_dict["answered_idx"],
+                "letter_choice": abstain_response_dict["letter_choice"],
                 "confidence": abstain_response_dict["confidence"],
                 "usage": abstain_response_dict["usage"]
             }
@@ -241,7 +194,7 @@ class NumericalCutOffExpert(Expert):
         return {
             "type": "question",
             "question": question_response_dict["atomic_question"],
-            "answered_idx": abstain_response_dict["answered_idx"],
+            "letter_choice": abstain_response_dict["letter_choice"],
             "confidence": abstain_response_dict["confidence"],
             "usage": abstain_response_dict["usage"]
         }
@@ -250,26 +203,12 @@ class NumericalCutOffExpert(Expert):
 class ScaleExpert(Expert):
     def respond(self, patient_state):
         # Decision-making based on the initial information, history of interactions, current inquiry, and options
-        kwargs = {
-            "max_depth": self.args.expert_fixed_depth,
-            "patient_state": patient_state,
-            "rationale_generation": self.args.rationale_generation,
-            "inquiry": self.inquiry,
-            "options_dict": self.options,
-            "abstain_threshold": self.args.abstain_threshold,
-            "self_consistency": self.args.self_consistency,
-            "model_name": self.args.expert_model,
-            "temperature": self.args.temperature,
-            "max_tokens": self.args.max_tokens,
-            "top_p": self.args.top_p,
-            "top_logprobs": self.args.top_logprobs,
-            "api_account": self.args.api_account
-        }
+        kwargs = self.get_abstain_kwargs(patient_state)
         abstain_response_dict = expert_functions.scale_abstention_decision(**kwargs)
         if abstain_response_dict["abstain"] == False:
             return {
                 "type": "choice",
-                "answered_idx": abstain_response_dict["answered_idx"],
+                "letter_choice": abstain_response_dict["letter_choice"],
                 "confidence": abstain_response_dict["confidence"],
                 "usage": abstain_response_dict["usage"]
             }
@@ -280,7 +219,7 @@ class ScaleExpert(Expert):
         return {
             "type": "question",
             "question": question_response_dict["atomic_question"],
-            "answered_idx": abstain_response_dict["answered_idx"],
+            "letter_choice": abstain_response_dict["letter_choice"],
             "confidence": abstain_response_dict["confidence"],
             "usage": abstain_response_dict["usage"]
         }

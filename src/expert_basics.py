@@ -1,214 +1,233 @@
-import sys
 import logging
 import random
 import re
 from helper import get_response
 
-global history_logger
-try: history_logger = logging.getLogger("history_logger")
-except: history_logger = None
 
-LIKERT_THRESHOLD = 4
-PROB_THRESHOLD = 0.8
-
-def log_info(message, logger=history_logger):
-    logger = logging.getLogger(logger) if type(logger) == str else logger
+def log_info(message, logger_name="detail_logger", print_to_std=False, type="info"):
+    # if type(logger) == str and logger in logging.getLogger().manager.loggerDict:
+    logger = logging.getLogger(logger_name)
+    if type == "error": return logger.error(message)
     if logger: logger.info(message)
-    sys.stdout.write(message + "\n")
+    if print_to_std: print(message + "\n")
 
-def expert_response_choice_or_question(message, options_dict, self_consistency=1, model_name="gpt-3.5-turbo", **kwargs):
+
+def expert_response_choice_or_question(messages, options_dict, self_consistency=1, **kwargs):
     """
     Implicit Abstain
     """
-    answers = []
-    answer_responses = []
-    questions = []
-    question_responses = []
+    log_info(f"++++++++++++++++++++ Start of Implicit Abstention [expert_basics.py:expert_response_choice_or_question()] ++++++++++++++++++++")
+    log_info(f"[<IMPLICIT ABSTAIN PROMPT>] [len(messages)={len(messages)}] (messages[-1]):\n{messages[-1]['content']}")
+    answers, questions, response_texts = [], [], {}
     total_tokens = {"input_tokens": 0, "output_tokens": 0}
     choice_logprobs = []
     for i in range(self_consistency):
-
-        log_info("[<PROMPT>]: " + message[-1]["content"])
-        response_text, log_probs, num_tokens = get_response(message, model_name, top_logprobs=20, max_tokens=60, **kwargs)
+        log_info(f"-------------------- Self-Consistency Iteration {i+1} --------------------")
+        response_text, log_probs, num_tokens = get_response(messages, **kwargs)
         total_tokens["input_tokens"] += num_tokens["input_tokens"]
         total_tokens["output_tokens"] += num_tokens["output_tokens"]
         if not response_text: 
-            log_info("[<LM RES>]: " + "No response --> Re-prompt")
+            log_info("[<IMPLICIT ABSTAIN LM RES>]: " + "No response --> Re-prompt")
             continue
-        log_info("[<LM RES>]: " + response_text)
+        log_info("[<IMPLICIT ABSTAIN LM RES>]: " + response_text)
         response_text = response_text.replace("Confident --> Answer: ", "").replace("Not confident --> Doctor Question: ", "")
 
         if "?" not in response_text:
             letter_choice = parse_choice(response_text, options_dict)
             if letter_choice:
-                log_info("[<PARSED>]: " + letter_choice)
+                log_info("[<IMPLICIT ABSTAIN PARSED>]: " + letter_choice)
                 answers.append(letter_choice)
-                answer_responses.append(response_text)
+                response_texts[letter_choice] = response_text
                 choice_logprobs.append(log_probs)
         else:
             # not a choice, parse as question
             atomic_question = parse_atomic_question(response_text)
             if atomic_question:
-                log_info("[<PARSED>]: " + atomic_question)
+                log_info("[<IMPLICIT ABSTAIN PARSED>]: " + atomic_question)
                 questions.append(atomic_question)
-                question_responses.append(response_text)
+                response_texts[atomic_question] = response_text
             
             else:
-                log_info("[<PARSED>]: " + "FAILED TO PARSE --> Re-prompt")
+                log_info("[<IMPLICIT ABSTAIN PARSED>]: " + "FAILED TO PARSE --> Re-prompt")
 
     if len(answers) + len(questions) == 0:
-        log_info("[<PARSED>]: " + "No response.")
+        log_info("[<IMPLICIT ABSTAIN SC-PARSED>]: " + "No response.")
         return "No response.", None, None, 0.0, {}, total_tokens
 
     conf_score = len(answers) / (len(answers) + len(questions))
-    log_info(f"[<IMPLICIT ABSTAIN RETURN>]: answers: {answers}, questions: {questions}, conf_score: {conf_score} ([{len(answers)}, {len(questions)}])")
     if len(answers) > len(questions): 
         final_answer = max(set(answers), key = answers.count)
-        response_text = answer_responses[answers.index(final_answer)]
+        response_text = response_texts[final_answer]
         top_logprobs = choice_logprobs[answers.index(final_answer)]
         atomic_question = None
     else:
         final_answer = None
         rand_id = random.choice(range(len(questions)))
-        response_text = question_responses[rand_id]
         atomic_question = questions[rand_id]
+        response_text = response_texts[atomic_question]
         top_logprobs = None
+    log_info(f"[<IMPLICIT ABSTAIN RETURN>]: atomic_question: {atomic_question}, final_answer: {final_answer}, conf_score: {conf_score} ([{len(answers)} : {len(questions)}])")
     return response_text, atomic_question, final_answer, conf_score, top_logprobs, total_tokens
 
 
 
-def expert_response_yes_no(messages, model_name="gpt-3.5-turbo", self_consistency=1, **kwargs):
+def expert_response_yes_no(messages, self_consistency=1, **kwargs):
     """
     Binary Abstain
     """
-    log_info("[<PROMPT>]: " + messages[-1]["content"])
+    log_info(f"++++++++++++++++++++ Start of YES/NO Decision [expert_basics.py:expert_response_yes_no()] ++++++++++++++++++++")
+    log_info(f"[<YES/NO PROMPT>] [len(messages)={len(messages)}] (messages[-1]):\n{messages[-1]['content']}")
 
-    yes_no_responses, log_probs_list = [], []
+    yes_no_responses, log_probs_list, response_texts = [], [], {}
     total_tokens = {"input_tokens": 0, "output_tokens": 0}
     for i in range(self_consistency):
-        response_text, log_probs, num_tokens = get_response(messages, model_name, **kwargs)
+        log_info(f"-------------------- Self-Consistency Iteration {i+1} --------------------")
+        response_text, log_probs, num_tokens = get_response(messages, **kwargs)
         total_tokens["input_tokens"] += num_tokens["input_tokens"]
         total_tokens["output_tokens"] += num_tokens["output_tokens"]
         if not response_text: 
-            log_info("[<LM RES>]: " + "No response.")
-        log_info("[<LM RES>]: " + response_text)
+            log_info("[<YES/NO LM RES>]: " + "No response.")
+        log_info("[<YES/NO LM RES>]: " + response_text)
         log_probs_list.append(log_probs)
 
         yes_choice = parse_yes_no(response_text)
+        log_info("[<YES/NO PARSED>]: " + yes_choice)
         yes_no_responses.append(yes_choice)
+        response_texts[yes_choice] = response_text
+    
     if yes_no_responses.count("YES") > yes_no_responses.count("NO"):
         yes_choice = "YES"
         log_probs = log_probs_list[yes_no_responses.index("YES")]
     else:
         yes_choice = "NO"
         log_probs = log_probs_list[yes_no_responses.index("NO")]
-
-    sys.stdout.write("[YES_NO]Response text: {}\n[YES_NO]Extracted: {}\n".format(response_text, yes_choice))
-    sys.stdout.write("----------------------------------------------------\n")
-    log_info("[<PARSED>]: " + yes_choice)
-    return response_text, yes_choice, yes_no_responses.count("YES")/len(yes_no_responses), log_probs, total_tokens
+    log_info(f"[<YES/NO RETURN>]: yes_choice: {yes_choice}, confidence: {yes_no_responses.count('YES')/len(yes_no_responses)}")
+    return response_texts[yes_choice], yes_choice, yes_no_responses.count("YES")/len(yes_no_responses), log_probs, total_tokens
 
 
 
-def expert_response_confidence_score(messages, model_name="gpt-3.5-turbo", self_consistency=1, **kwargs):
+def expert_response_confidence_score(messages, self_consistency=1, **kwargs):
     """
     Numerical Abstain
     """
-    log_info("[<PROMPT>]: " + messages[-1]["content"])
+    log_info(f"++++++++++++++++++++ Start of Numerical Confidence Score [expert_basics.py:expert_response_confidence_score()] ++++++++++++++++++++")
+    log_info(f"[<CONF SCORE PROMPT>] [len(messages)={len(messages)}] (messages[-1]):\n{messages[-1]['content']}")
 
-    conf_scores = []
+    conf_scores, log_probs_list, response_texts = [], {}, {}
     total_tokens = {"input_tokens": 0, "output_tokens": 0}
-    for _ in range(self_consistency):
-        response_text, log_probs, num_tokens = get_response(messages, model_name, **kwargs)
+    for i in range(self_consistency):
+        log_info(f"-------------------- Self-Consistency Iteration {i+1} --------------------")
+        response_text, log_probs, num_tokens = get_response(messages, **kwargs)
         total_tokens["input_tokens"] += num_tokens["input_tokens"]
         total_tokens["output_tokens"] += num_tokens["output_tokens"]
         if not response_text: 
-            log_info("[<LM RES>]: " + "No response.")
-            # return "No response.", 0.0, num_tokens
-        log_info("[<LM RES>]: " + response_text)
+            log_info("[<CONF SCORE LM RES>]: " + "No response.")
+            continue
+        log_info("[<CONF SCORE LM RES>]: " + response_text)
 
         conf_score = parse_confidence_score(response_text)
         conf_scores.append(conf_score)
-        log_info(f"[<PARSED>]: {conf_score}")
+        log_probs_list[conf_score] = log_probs
+        response_texts[conf_score] = response_text
+        log_info(f"[<CONF SCORE PARSED>]: {conf_score}")
     
-    avg_conf_score = sum(conf_scores) / len(conf_scores) if len(conf_scores) > 0 else 0.0
-    response_text = "CONFIDENCE SCORE: " + str(avg_conf_score)
-    sys.stdout.write("[CONFIDENCE]Response text: {}\n[CONFIDENCE]Extracted (average): {}\n".format(response_text, avg_conf_score))
-    sys.stdout.write("----------------------------------------------------\n")
-    log_info(f"[<PARSED>] [average conf score] {avg_conf_score}")
+    if len(conf_scores) > 0:
+        avg_conf_score = sum(conf_scores) / len(conf_scores)
+        # response_text = "CONFIDENCE SCORE: " + str(avg_conf_score)
+        temp = [abs(r-avg_conf_score) for r in conf_scores]
+        response_text = response_texts[conf_scores[temp.index(min(temp))]]
+        log_probs = log_probs_list[conf_scores[temp.index(min(temp))]]
+    else:
+        avg_conf_score, response_text, log_probs = 0, "No response.", None
+    log_info(f"[<CONF SCORE RETURN>] (average conf score): {avg_conf_score}")
     return response_text, avg_conf_score, log_probs, total_tokens
 
 
-def expert_response_scale(messages, model_name="gpt-3.5-turbo", abstain_threshold=LIKERT_THRESHOLD, self_consistency=1, **kwargs):
+
+def expert_response_scale_score(messages, self_consistency=1, **kwargs):
     """
     Scale Abstain
     """
-    log_info("[<PROMPT>]: " + messages[-1]["content"])
+    log_info(f"++++++++++++++++++++ Start of Scale Confidence Score [expert_basics.py:expert_response_scale_score()] ++++++++++++++++++++")
+    log_info(f"[<SCALE SCORE PROMPT>] [len(messages)={len(messages)}] (messages[-1]):\n{messages[-1]['content']}")
 
-    conf_scores, log_probs_list = [], []
+    conf_scores, log_probs_list, response_texts = [], {}, {}
     total_tokens = {"input_tokens": 0, "output_tokens": 0}
     for i in range(self_consistency):
-        response_text, log_probs, num_tokens = get_response(messages, model_name, **kwargs)
+        log_info(f"-------------------- Self-Consistency Iteration {i+1} --------------------")
+        response_text, log_probs, num_tokens = get_response(messages, **kwargs)
         total_tokens["input_tokens"] += num_tokens["input_tokens"]
         total_tokens["output_tokens"] += num_tokens["output_tokens"]
         if not response_text:
-            log_info("[<LM RES>]: " + "No response.")
-            # return "No response.", False, num_tokens
-        log_info("[<LM RES>]: " + response_text)
-        log_probs_list.append(log_probs)
+            log_info("[<SCALE SCORE LM RES>]: " + "No response.")
+            continue
+        log_info("[<SCALE SCORE LM RES>]: " + response_text)
 
         conf_score = parse_likert_scale(response_text)
         conf_scores.append(conf_score)
-        log_info("[<PARSED>]: " + str(conf_score))
+        log_probs_list[conf_score] = log_probs
+        response_texts[conf_score] = response_text
+        log_info("[<SCALE SCORE PARSED>]: " + str(conf_score))
     
-    avg_conf_score = sum(conf_scores) / len(conf_scores) if len(conf_scores) > 0 else 0
-    if avg_conf_score >= abstain_threshold:
-        log_info(f"[<PARSED>]: line 416: AVERAGE CONF SCORE = {str(avg_conf_score)} ([{', '.join([str(s) for s in conf_scores])}]) >= {abstain_threshold}, return \"YES\"")
-        return response_text, "YES", avg_conf_score, log_probs, total_tokens
+    if len(conf_scores) > 0:
+        avg_conf_score = sum(conf_scores) / len(conf_scores)
+        temp = [abs(r-avg_conf_score) for r in conf_scores]
+        response_text = response_texts[conf_scores[temp.index(min(temp))]]
+        log_probs = log_probs_list[conf_scores[temp.index(min(temp))]]
     else:
-        log_info(f"[<PARSED>]: line 419: AVERAGE CONF SCORE = {str(avg_conf_score)} ([{', '.join([str(s) for s in conf_scores])}]) < {abstain_threshold}, return \"NO\"")
-        return response_text, "NO", avg_conf_score, log_probs, total_tokens
+        avg_conf_score, response_text, log_probs = 0, "No response.", None
+    log_info(f"[<SCALE SCORE RETURN>] (average conf score]): {avg_conf_score}")
+    return response_text, avg_conf_score, log_probs, total_tokens
 
 
-def expert_response_choice(messages, options_dict, model_name="gpt-3.5-turbo", **kwargs):
+
+def expert_response_choice(messages, options_dict, **kwargs):
     """
     Get intermediate answer choice regardless of abstention decision
     """
-    log_info("[<GET ANSWER PROMPT>]: " + messages[-1]["content"])
-    response_text, log_probs, num_tokens = get_response(messages, model_name, **kwargs)
+    log_info(f"++++++++++++++++++++ Start of Multiple Chocie Decision [expert_basics.py:expert_response_choice()] ++++++++++++++++++++")
+    log_info(f"[<CHOICE PROMPT>] [len(messages)={len(messages)}] (messages[-1]):\n{messages[-1]['content']}")
+    response_text, log_probs, num_tokens = get_response(messages, **kwargs)
     if not response_text: 
-        log_info("[<LM RES>]: " + "No response.")
+        log_info("[<CHOICE LM RES>]: " + "No response.")
         return "No response.", None, num_tokens
-    log_info("[<LM RES>]: " + response_text)
+    log_info("[<CHOICE LM RES>]: " + response_text)
 
     letter_choice = parse_choice(response_text, options_dict)
     if letter_choice:
-        log_info("[<PARSED>]: " + letter_choice)
+        log_info("[<CHOICE PARSED>]: " + letter_choice)
     else:
-        log_info("[<PARSED>]: " + "FAILED TO PARSE.")
+        log_info("[<CHOICE PARSED>]: " + "FAILED TO PARSE.")
     
     return response_text, letter_choice, num_tokens
 
 
-def expert_response_question(messages, model_name="gpt-3.5-turbo", **kwargs):
+
+def expert_response_question(messages, **kwargs):
     """
     Get follow-up question
     """
-    log_info("[<GET QUESTION PROMPT>]: " + messages[-1]["content"])
-    response_text, log_probs, num_tokens = get_response(messages, model_name, **kwargs)
+    log_info(f"++++++++++++++++++++ Start of Question Generator [expert_basics.py:expert_response_question()] ++++++++++++++++++++")
+    log_info(f"[<QUESTION GENERATOR PROMPT>] [len(messages)={len(messages)}] (messages[-1]):\n{messages[-1]['content']}")
+    response_text, log_probs, num_tokens = get_response(messages, **kwargs)
     if not response_text: 
-        log_info("[<LM RES>]: " + "No response.")
+        log_info("[<QUESTION GENERATOR LM RES>]: " + "No response.")
         return "No response.", None, num_tokens
-    log_info("[<LM RES>]: " + response_text)
+    log_info("[<QUESTION GENERATOR LM RES>]: " + response_text)
 
     atomic_question = parse_atomic_question(response_text)
     if atomic_question:
-        log_info("[<PARSED>]: " + atomic_question)
+        log_info("[<QUESTION GENERATOR PARSED>]: " + atomic_question)
     else:
-        log_info("[<PARSED>]: " + "FAILED TO PARSE.")
+        log_info("[<QUESTION GENERATOR PARSED>]: " + "FAILED TO PARSE.")
     
     return response_text, atomic_question, num_tokens
 
+
+
+############################
+# Helper Functions for Parsing Responses
+############################
 
 def parse_atomic_question(response_text):
     questions = []
@@ -217,46 +236,38 @@ def parse_atomic_question(response_text):
             questions.append(line.split(":")[-1].strip())
         
     if len(questions) == 0:
-        logging.error("can't find question in answer: {}".format(response_text))
-        log_info("[<PARSED>]: " + "FAILED TO PARSE.")
+        log_info("can't find question in answer: {}".format(response_text), type="error")
         return None
             
     atomic_question = questions[-1].replace("'", "").replace('"', "").strip()
-    # sys.stdout.write("[QUESTION LM Response text]: {}\n[QUESTION Extracted]: {}\n".format(response_text, atomic_question))
-    # sys.stdout.write("----------------------------------------------------\n")
-    # if atomic_question: log_info("[<PARSED>]: " + atomic_question)
-    # else: log_info("[<PARSED>]: " + "FAILED TO PARSE.")
     return atomic_question
 
 def parse_choice(response_text, options_dict):
-    choice = None
+    if response_text.strip() in ["A", "B", "C", "D"]:
+        return response_text.strip()
     for response_line in response_text.split("\n"):
         for op_letter, op_text in options_dict.items():
             if op_text.lower() in response_line.lower():
-                print(f"Found {op_text} in response line: {response_line}")
+                log_info(f"....Found {op_text} in response line: {response_line}")
                 return op_letter
         for op_letter in options_dict.keys():
             if op_letter in [token for token in re.sub(r"[,.;@#()?!'/&:$]+\ *", " ", response_line).split(' ')]:
-                op_letter_str = op_letter if op_letter else "none"
-                response_line_str = response_line if response_line else "none"
-                print(f"Found {op_letter_str} in response line: {response_line_str}")
+                # op_letter_str = str(op_letter) if op_letter else "none"
+                # response_line_str = str(response_line) if response_line else "none"
+                log_info(f"....Found {op_letter} in response line: {response_line}")
                 return op_letter
-    return choice
+    log_info("can't parse choice: {}".format(response_text), type="error")
+    return None
 
 def parse_yes_no(response_text):
-    temp_processed_response = response_text.lower().replace('.','').replace(',','').replace(';','').replace(':','').split()
-    temp_processed_response = temp_processed_response.split("DECISION:")[-1].strip()
+    temp_processed_response = response_text.lower().replace('.','').replace(',','').replace(';','').replace(':','').split("DECISION:")[-1].strip()
     yes_answer = "yes" in temp_processed_response
     no_answer = "no" in temp_processed_response
-    if yes_answer and no_answer:
+    if yes_answer == no_answer:
         yes_choice = "NO"
-        logging.error("can't parse RG abstain answer: {}".format(response_text))
-    if yes_answer == False and no_answer == False:
-        yes_choice = "NO"
-        logging.error("can't parse RG abstain answer: {}".format(response_text))
+        log_info("can't parse yes/no abstain answer: {}".format(response_text), type="error")
     if yes_answer: yes_choice = "YES"
     elif no_answer: yes_choice = "NO"
-    logging.error("can't parse yes/no answer: {}".format(response_text))
     return yes_choice
 
 def parse_confidence_score(response_text):
@@ -265,7 +276,7 @@ def parse_confidence_score(response_text):
     scores = re.findall(float_regex, response_text)
 
     if len(scores) == 0:
-        logging.error("can't parse confidence score - answer: {}".format(response_text))
+        log_info("can't parse confidence score - answer: {}".format(response_text), type="error")
         score = round(0.2 + (random.random() - random.random()) * 0.2, 4)
         return score
     
@@ -290,5 +301,5 @@ def parse_likert_scale(response_text):
         conf_score = 1
     else:
         conf_score = 0
-        logging.error("can't parse likert confidence score: {}".format(response_text))
+        log_info("can't parse likert confidence score: {}".format(response_text), type="error")
     return conf_score
